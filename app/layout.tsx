@@ -1,15 +1,21 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ 
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+const geistMono = Geist_Mono({ 
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'Speech to Text | AI-Powered Transcription',
+  description: 'Transform your audio files into accurate text transcriptions using Google Gemini AI. Support for multiple languages, speaker detection, and emotion analysis.',
+  generator: 'Next.js',
   icons: {
     icon: [
       {
@@ -35,10 +41,26 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`font-sans antialiased`}>
-        {children}
-        <Analytics />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <div className="modern-bg min-h-screen">
+            {/* Neon glow effects */}
+            <div className="neon-glow neon-glow-orange w-[500px] h-[500px] -top-32 -left-32" />
+            <div className="neon-glow neon-glow-blue w-[400px] h-[400px] top-1/2 -right-24" />
+            <div className="neon-glow neon-glow-purple w-[350px] h-[350px] -bottom-20 left-1/3" />
+            
+            {/* Main content */}
+            <div className="content-layer">
+              {children}
+            </div>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )
