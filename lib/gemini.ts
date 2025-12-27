@@ -100,6 +100,9 @@ const transcriptionSchema = {
   required: ["summary", "segments"],
 };
 
+// Model selection (configurable via env)
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+
 const TRANSCRIPTION_PROMPT = `
 Process the audio file and generate a detailed transcription.
 
@@ -234,7 +237,7 @@ async function transcribeInline(
 
   const response = await retryWithBackoff("Gemini inline transcription", () =>
     ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: [
         {
           parts: [
@@ -282,7 +285,7 @@ async function transcribeWithFilesAPI(
 
     const response = await retryWithBackoff("Gemini file transcription", () =>
       ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: GEMINI_MODEL,
         contents: [
           {
             parts: [
@@ -325,6 +328,7 @@ export async function transcribeAudio(
   const mimeType = getMimeType(fileName);
   const fileSizeMB = buffer.length / (1024 * 1024);
 
+  logWithTs(`Using Gemini model: ${GEMINI_MODEL}`);
   logWithTs(`📊 File size: ${fileSizeMB.toFixed(2)} MB`);
   logWithTs(`📁 MIME type: ${mimeType}`);
 
@@ -367,7 +371,7 @@ export async function transcribeAudioSimple(
 
       const response = await retryWithBackoff("Gemini simple file transcript", () =>
         ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: GEMINI_MODEL,
           contents: [
             {
               parts: [
@@ -397,7 +401,7 @@ export async function transcribeAudioSimple(
 
   const response = await retryWithBackoff("Gemini simple inline transcript", () =>
     ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: [
         {
           parts: [
