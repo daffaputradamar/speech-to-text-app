@@ -155,16 +155,16 @@ export default function SpeechToTextPage() {
               </div>
 
               <TabsContent value="all" className="mt-0">
-                <TranscriptList tasks={tasks} onChange={() => mutate()} />
+                <TranscriptList tasks={tasks} onChange={() => void mutate()} />
               </TabsContent>
               <TabsContent value="active" className="mt-0">
-                <TranscriptList tasks={inProgressTasks} onChange={() => mutate()} />
+                <TranscriptList tasks={inProgressTasks} onChange={() => void mutate()} />
               </TabsContent>
               <TabsContent value="done" className="mt-0">
-                <TranscriptList tasks={completedTasks} onChange={() => mutate()} />
+                <TranscriptList tasks={completedTasks} onChange={() => void mutate()} />
               </TabsContent>
               <TabsContent value="failed" className="mt-0">
-                <TranscriptList tasks={failedTasks} onChange={() => mutate()} />
+                <TranscriptList tasks={failedTasks} onChange={() => void mutate()} />
               </TabsContent>
             </Tabs>
           </div>

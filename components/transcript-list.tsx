@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { FileAudio, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, Upload, User, Copy, Check, Download, Trash2, Loader2 } from "lucide-react"
+import { FileAudio, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, User, Copy, Check, Download, Trash2, Loader2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
-import type { TranscriptTask, TranscriptStatus, TranscriptSegment } from "@/types/transcription"
+import type { TranscriptTask, TranscriptStatus } from "@/types/transcription"
 
 // Re-export the types for backward compatibility
 export type { TranscriptTask, TranscriptStatus }
@@ -46,12 +46,8 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
 
   const handleCopyTranscript = async () => {
     if (!task.result) return
-
-    const fullTranscript = task.result.segments
-      .map((s) => `[${s.timestamp}] ${s.speaker}: ${s.content}`)
-      .join("\n")
-
-    await navigator.clipboard.writeText(fullTranscript)
+    const text = typeof task.result === "string" ? task.result : JSON.stringify(task.result)
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -117,22 +113,17 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
         {task.status === "completed" && task.result && (
           <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <div className="space-y-3">
-              {/* Summary */}
-              <div className="bg-muted/50 p-3 rounded-md border">
-                <p className="text-sm font-medium mb-1">Summary</p>
-                <p className="text-sm text-muted-foreground">{task.result.summary}</p>
-              </div>
-
-              {/* Preview of first segment */}
-              {!isOpen && task.result.segments.length > 0 && (
-                <div className="text-sm text-muted-foreground italic line-clamp-2">
-                  "{task.result.segments[0].content}"
+              {/* Preview when collapsed */}
+              {!isOpen && (
+                <div className="bg-muted/30 p-3 rounded-md border text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap break-words">
+                  {typeof task.result === "string" ? task.result.substring(0, 300) : JSON.stringify(task.result).substring(0, 300)}
+                  {(typeof task.result === "string" ? task.result.length : JSON.stringify(task.result).length) > 300 && "..."}
                 </div>
               )}
 
-              {/* Full transcript */}
+              {/* Full transcript textarea */}
               <CollapsibleContent>
-                <div className="space-y-2 mt-3">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">Full Transcript</p>
                     <Button
@@ -154,11 +145,11 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
                       )}
                     </Button>
                   </div>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {task.result.segments.map((segment, index) => (
-                      <SegmentItem key={index} segment={segment} />
-                    ))}
-                  </div>
+                  <textarea
+                    value={typeof task.result === "string" ? task.result : JSON.stringify(task.result)}
+                    readOnly
+                    className="w-full h-64 p-3 bg-muted/50 border rounded-md text-sm font-mono resize-none focus-visible:outline-none"
+                  />
                 </div>
               </CollapsibleContent>
 
@@ -167,18 +158,18 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
                   {isOpen ? (
                     <>
                       <ChevronUp className="h-4 w-4 mr-1" />
-                      Show less
+                      Hide transcript
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4 mr-1" />
-                      Show full transcript ({task.result.segments.length} segments)
+                      Show transcript
                     </>
                   )}
                 </Button>
               </CollapsibleTrigger>
 
-              <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <a href={`/api/tasks/${task.id}/download`} download>
                     <Download className="h-4 w-4 mr-2" />
@@ -225,40 +216,6 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
   )
 }
 
-function SegmentItem({ segment }: { segment: TranscriptSegment }) {
-  const emotionColors: Record<string, string> = {
-    happy: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    sad: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    angry: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    neutral: "bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-400",
-  }
-
-  return (
-    <div className="bg-muted/30 p-3 rounded-md border text-sm space-y-1">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <User className="h-3 w-3 text-muted-foreground" />
-          <span className="font-medium text-xs">{segment.speaker}</span>
-          <span className="text-xs text-muted-foreground">{segment.timestamp}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-            {segment.language}
-          </Badge>
-          <Badge className={`text-[10px] px-1.5 py-0 ${emotionColors[segment.emotion] || emotionColors.neutral}`}>
-            {segment.emotion}
-          </Badge>
-        </div>
-      </div>
-      <p className="text-muted-foreground">{segment.content}</p>
-      {segment.translation && segment.language_code !== "en" && (
-        <p className="text-xs text-muted-foreground/70 italic border-t pt-1 mt-1">
-          Translation: {segment.translation}
-        </p>
-      )}
-    </div>
-  )
-}
 
 function StatusBadge({ status }: { status: TranscriptStatus }) {
   switch (status) {
@@ -266,7 +223,7 @@ function StatusBadge({ status }: { status: TranscriptStatus }) {
     case "uploading":
       return (
         <Badge variant="outline" className="gap-1">
-          <Upload className="h-3 w-3" />
+          <Loader2 className="h-3 w-3 animate-spin" />
           Uploading
         </Badge>
       )

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
 import { db } from "@/lib/db";
 import { tasks } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import type { TranscriptTask } from "@/types/transcription";
+import { isSupportedFormat, saveToTempFile } from "@/lib/gemini";
+import { transcriptionQueue } from "@/lib/queue";
+import { logWithTs, logErrorWithTs } from "@/lib/logger";
 
 export async function GET() {
   if (!db) {
@@ -33,44 +37,66 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!isSupportedFormat(file.name)) {
+      return NextResponse.json(
+        { error: "Unsupported file format. Supported: MP3, WAV, AIFF, AAC, OGG, FLAC, M4A, WEBM" },
+        { status: 400 }
+      );
+    }
+
+    const maxSize = 500 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 500MB." },
+        { status: 400 }
+      );
+    }
+
     const [inserted] = await db
       .insert(tasks)
       .values({
         fileName: file.name,
         fileSize: file.size,
-        status: "uploading",
+        status: "pending",
         progress: 0,
       })
       .returning();
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const tempPath = await saveToTempFile(buffer, file.name);
+
+    logWithTs(`📝 Enqueuing transcription for task ${inserted.id}`);
+    try {
+      const job = await transcriptionQueue.add("transcribe", {
+        taskId: inserted.id,
+        filePath: tempPath,
+        fileName: file.name,
+      });
+      logWithTs(`✅ Job ${job.id} enqueued for task ${inserted.id}`);
+    } catch (error) {
+      logErrorWithTs(`❌ Failed to enqueue job for task ${inserted.id}:`, error);
+      await fs.promises.unlink(tempPath).catch(() => {});
+      await db
+        .update(tasks)
+        .set({ status: "failed", error: "Failed to enqueue transcription", updatedAt: new Date() })
+        .where(eq(tasks.id, inserted.id));
+      throw error;
+    }
 
     const newTask: TranscriptTask = {
       id: inserted.id,
       fileName: inserted.fileName,
       fileSize: inserted.fileSize,
-      status: inserted.status,
+      status: "pending",
       progress: inserted.progress,
       createdAt: inserted.createdAt,
-      result: inserted.result ?? undefined,
+      result: inserted.result as string ?? undefined,
       error: inserted.error ?? undefined,
     };
 
-    // Start transcription in the background
-    // We need to forward the file to the transcribe endpoint
-    const transcribeFormData = new FormData();
-    transcribeFormData.append("audio", file);
-    transcribeFormData.append("taskId", inserted.id);
-
-    // Fire and forget - don't await this
-    fetch(new URL("/api/transcribe", req.url).toString(), {
-      method: "POST",
-      body: transcribeFormData,
-    }).catch((error) => {
-      console.error("Failed to start transcription:", error);
-    });
-
     return NextResponse.json(newTask);
   } catch (error) {
-    console.error("Error creating task:", error);
+    logErrorWithTs("Error creating task:", error);
     return NextResponse.json(
       { error: "Failed to create task" },
       { status: 500 }

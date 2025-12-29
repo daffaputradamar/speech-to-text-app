@@ -11,6 +11,9 @@ import path from "path";
 import os from "os";
 import { logWithTs, logErrorWithTs } from "@/lib/logger";
 
+import dotenv from "dotenv";
+dotenv.config();
+
 // Basic retry helper for transient network errors (e.g., headers timeout)
 async function retryWithBackoff<T>(
   label: string,
@@ -22,18 +25,36 @@ async function retryWithBackoff<T>(
 
   for (let i = 0; i < attempts; i++) {
     try {
+      logWithTs(`🔄 ${label} (attempt ${i + 1}/${attempts})...`);
       return await fn();
     } catch (err) {
       lastError = err;
       const code = (err as any)?.cause?.code || (err as any)?.code;
-      const retryable = code === "UND_ERR_HEADERS_TIMEOUT" || code === "ECONNRESET";
-      logErrorWithTs(`Retryable error during ${label}:`, err);
+      const message = (err as any)?.message || String(err);
+      const statusCode = (err as any)?.status || (err as any)?.statusCode;
+      
+      logErrorWithTs(`❌ ${label} failed:`, {
+        code,
+        statusCode,
+        message,
+        attempt: `${i + 1}/${attempts}`,
+      });
 
+      const retryable = 
+        code === "UND_ERR_HEADERS_TIMEOUT" || 
+        code === "ECONNRESET" || 
+        message.includes("fetch failed") ||
+        message.includes("ECONNREFUSED") ||
+        message.includes("ETIMEDOUT") ||
+        message.includes("ERR_HTTP") ||
+        (statusCode >= 500 && statusCode < 600);
+      
       if (!retryable || i === attempts - 1) {
         throw err;
       }
 
       const delay = baseDelayMs * Math.pow(2, i);
+      logWithTs(`⏳ Retrying in ${(delay / 1000).toFixed(1)}s...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -61,58 +82,25 @@ const MIME_TYPES: Record<string, string> = {
 // Emotion enum values
 const EmotionValues = ["happy", "sad", "angry", "neutral"] as const;
 
-// Transcription schema for structured output
-const transcriptionSchema = {
-  type: Type.OBJECT,
-  properties: {
-    summary: {
-      type: Type.STRING,
-      description: "A concise summary of the audio content.",
-    },
-    segments: {
-      type: Type.ARRAY,
-      description: "List of transcribed segments with speaker and timestamp.",
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          speaker: { type: Type.STRING },
-          timestamp: { type: Type.STRING },
-          content: { type: Type.STRING },
-          language: { type: Type.STRING },
-          language_code: { type: Type.STRING },
-          translation: { type: Type.STRING },
-          emotion: {
-            type: Type.STRING,
-            enum: [...EmotionValues],
-          },
-        },
-        required: [
-          "speaker",
-          "timestamp",
-          "content",
-          "language",
-          "language_code",
-          "emotion",
-        ],
-      },
-    },
-  },
-  required: ["summary", "segments"],
-};
-
 // Model selection (configurable via env)
 const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 
 const TRANSCRIPTION_PROMPT = `
-Process the audio file and generate a detailed transcription.
+Transcribe the audio content as plain text with speaker diarization.
 
-Requirements:
-1. Identify distinct speakers (e.g., Speaker 1, Speaker 2, or names if context allows).
-2. Provide accurate timestamps for each segment (Format: MM:SS).
-3. Detect the primary language of each segment.
-4. If the segment is in a language different than English, also provide the English translation.
-5. Identify the primary emotion of the speaker in this segment. You MUST choose exactly one of the following: happy, sad, angry, neutral.
-6. Provide a brief summary of the entire audio at the beginning.
+IMPORTANT: Return ONLY plain text. Do NOT return JSON, summaries, or structured data.
+
+Format requirements:
+- Each line should be: [HH:MM:SS] Speaker X: <speech content>
+- Use consistent speaker labels (Speaker 1, Speaker 2, etc.)
+- Include timestamps in HH:MM:SS or MM:SS format
+- Preserve conversation flow and order
+- Return plain text only, no JSON formatting
+
+Example output:
+[00:01] Speaker 1: Hello, how are you today?
+[00:05] Speaker 2: I'm doing well, thanks for asking.
+[00:10] Speaker 1: Great to hear from you.
 `;
 
 /**
@@ -166,22 +154,32 @@ async function uploadToGemini(
   mimeType: string
 ): Promise<{ uri: string; mimeType: string; name: string }> {
   logWithTs(`📤 Uploading file to Gemini Files API...`);
+  const fileStats = await fs.promises.stat(filePath);
+  logWithTs(`   File size: ${(fileStats.size / 1024 / 1024).toFixed(2)} MB`);
 
-  const file = await retryWithBackoff("Gemini upload", () =>
-    ai.files.upload({
-      file: filePath,
-      config: {
-        mimeType: mimeType,
-      },
-    })
-  );
+  try {
+    const file = await retryWithBackoff("Gemini upload", () =>
+      ai.files.upload({
+        file: filePath,
+        config: {
+          mimeType: mimeType,
+        },
+      }),
+      5, // 5 attempts for uploads
+      3000 // 3 second initial delay
+    );
 
-  logWithTs(`✅ Upload complete. File URI: ${file.uri}`);
-  return {
-    uri: file.uri!,
-    mimeType: file.mimeType!,
-    name: file.name!,
-  };
+    logWithTs(`✅ Upload complete. File URI: ${file.uri}`);
+    logWithTs(`   File name: ${file.name}`);
+    return {
+      uri: file.uri!,
+      mimeType: file.mimeType!,
+      name: file.name!,
+    };
+  } catch (error) {
+    logErrorWithTs(`Failed to upload file to Gemini:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -203,27 +201,35 @@ async function waitForFileReady(
   fileName: string,
   maxAttempts = 360 // ~30 minutes at 5s intervals
 ): Promise<void> {
-  logWithTs(`⏳ Waiting for file to be ready...`);
+  logWithTs(`⏳ Waiting for file to be ready in Gemini...`);
 
   for (let attempts = 0; attempts < maxAttempts; attempts++) {
-    const fileInfo = await ai.files.get({ name: fileName });
+    try {
+      const fileInfo = await ai.files.get({ name: fileName });
 
-    if (fileInfo.state === "ACTIVE") {
-      logWithTs(`✅ File is ready`);
-      return;
+      if (fileInfo.state === "ACTIVE") {
+        logWithTs(`✅ File is ready (${attempts + 1} checks)`);
+        return;
+      }
+
+      if (fileInfo.state !== "PROCESSING") {
+        throw new Error(`File processing failed. State: ${fileInfo.state}`);
+      }
+
+      if (attempts % 10 === 0) {
+        logWithTs(
+          `   File state: ${fileInfo.state} (check ${attempts + 1}/${maxAttempts})`
+        );
+      }
+      
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+    } catch (error) {
+      logErrorWithTs(`Error checking file status:`, error);
+      throw error;
     }
-
-    if (fileInfo.state !== "PROCESSING") {
-      throw new Error(`File processing failed. State: ${fileInfo.state}`);
-    }
-
-    logWithTs(
-      `   File state: ${fileInfo.state} (attempt ${attempts + 1}/${maxAttempts})`
-    );
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
   }
 
-  throw new Error("File processing timed out");
+  throw new Error("File processing timed out after 30 minutes");
 }
 
 /**
@@ -253,14 +259,17 @@ async function transcribeInline(
           ],
         },
       ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: transcriptionSchema,
-      },
     })
   );
 
-  return JSON.parse(response.text!) as TranscriptionResult;
+  const responseText = response.text;
+  logWithTs(`📄 Gemini response (${responseText?.length || 0} chars)`);
+
+  if (!responseText) {
+    throw new Error("Gemini API returned empty response");
+  }
+
+  return responseText;
 }
 
 /**
@@ -279,40 +288,53 @@ async function transcribeWithFilesAPI(
     // Wait for file to be processed
     await waitForFileReady(uploadedFile.name);
 
-    console.log(
-      `🔄 Processing transcription (this may take several minutes for long audio)...`
+    logWithTs(
+      `🔄 Processing transcription (this may take several minutes for 2-hour audio)...`
     );
 
-    const response = await retryWithBackoff("Gemini file transcription", () =>
-      ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [
-          {
-            parts: [
-              {
-                fileData: {
-                  fileUri: uploadedFile.uri,
-                  mimeType: uploadedFile.mimeType,
+    try {
+      const response = await retryWithBackoff("Gemini file transcription", () => {
+        logWithTs(`   Sending transcription request to Gemini...`);
+        return ai.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: [
+            {
+              parts: [
+                {
+                  fileData: {
+                    fileUri: uploadedFile!.uri,
+                    mimeType: uploadedFile!.mimeType,
+                  },
                 },
-              },
-              {
-                text: TRANSCRIPTION_PROMPT,
-              },
-            ],
-          },
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: transcriptionSchema,
-        },
-      })
-    );
+                {
+                  text: TRANSCRIPTION_PROMPT,
+                },
+              ],
+            },
+          ],
+        });
+      });
 
-    return JSON.parse(response.text!) as TranscriptionResult;
+      const responseText = response.text;
+      logWithTs(`📄 Gemini file API response received (${responseText?.length || 0} chars)`);
+
+      if (!responseText) {
+        throw new Error("Gemini API returned empty response");
+      }
+
+      return responseText;
+    } catch (error) {
+      logErrorWithTs(`❌ Transcription request failed:`, error);
+      throw error;
+    }
   } finally {
     // Clean up: delete file from Gemini
     if (uploadedFile) {
-      await deleteFromGemini(uploadedFile.name);
+      try {
+        await deleteFromGemini(uploadedFile.name);
+      } catch (cleanupError) {
+        logErrorWithTs(`Warning: Failed to cleanup file from Gemini:`, cleanupError);
+      }
     }
   }
 }

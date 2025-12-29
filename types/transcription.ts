@@ -2,26 +2,7 @@
  * Types for Speech-to-Text Transcription Results
  */
 
-export type Emotion = "happy" | "sad" | "angry" | "neutral";
-
-export interface TranscriptSegment {
-  speaker: string;
-  timestamp: string;
-  content: string;
-  language: string;
-  language_code: string;
-  translation?: string;
-  emotion: Emotion;
-}
-
-export interface TranscriptionResult {
-  summary: string;
-  segments: TranscriptSegment[];
-}
-
-export interface SimpleTranscriptionResult {
-  transcript: string;
-}
+export type TranscriptionResult = string;
 
 export type TranscriptStatus = "pending" | "uploading" | "processing" | "completed" | "failed";
 
