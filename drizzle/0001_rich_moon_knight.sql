@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ALTER COLUMN "result" SET DATA TYPE text;

@@ -4,7 +4,7 @@
 
 export type TranscriptionResult = string;
 
-export type TranscriptStatus = "pending" | "uploading" | "processing" | "completed" | "failed";
+export type TranscriptStatus = "pending" | "uploading" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface TranscriptTask {
   id: string;

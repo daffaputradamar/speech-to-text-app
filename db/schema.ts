@@ -6,6 +6,7 @@ export const taskStatusEnum = pgEnum("task_status", [
   "processing",
   "completed",
   "failed",
+  "cancelled",
 ]);
 
 export const tasks = pgTable("tasks", {
@@ -14,7 +15,7 @@ export const tasks = pgTable("tasks", {
   fileSize: bigint("file_size", { mode: "number" }).notNull(),
   status: taskStatusEnum("status").notNull().default("pending"),
   progress: integer("progress").notNull().default(0),
-  result: jsonb("result"),
+  result: text("result"),
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

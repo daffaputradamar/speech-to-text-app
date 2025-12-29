@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Mic, Sparkles, Globe, Users, Moon, Sun } from "lucide-react"
+import { Mic, Sparkles, Globe, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import type { TranscriptTask } from "@/types/transcription"
 
@@ -77,7 +77,7 @@ export default function SpeechToTextPage() {
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight gradient-text">
                   Speech to Text
                 </h1>
-                <p className="text-sm text-muted-foreground">Powered by Google Gemini AI</p>
+                <p className="text-sm text-muted-foreground">Local transcription with Whisper</p>
               </div>
             </div>
             <Button
@@ -101,10 +101,6 @@ export default function SpeechToTextPage() {
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/5 border border-blue-500/10 rounded-full text-xs font-medium text-blue-600 dark:text-blue-400">
               <Globe className="h-3.5 w-3.5" />
               Multi-language
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/5 border border-purple-500/10 rounded-full text-xs font-medium text-purple-600 dark:text-purple-400">
-              <Users className="h-3.5 w-3.5" />
-              Speaker Detection
             </div>
           </div>
         </header>
@@ -136,9 +132,9 @@ export default function SpeechToTextPage() {
           <div className="lg:col-span-2">
             <Tabs defaultValue="all" className="w-full">
               <div className="flex items-center justify-between mb-4">
-                <TabsList className="bg-muted/50 backdrop-blur-sm">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="active">
+                <TabsList className="bg-muted backdrop-blur-sm">
+                  <TabsTrigger className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4" value="all">All</TabsTrigger>
+                  <TabsTrigger className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4" value="active">
                     Active
                     {inProgressTasks.length > 0 && (
                       <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full">
@@ -146,8 +142,8 @@ export default function SpeechToTextPage() {
                       </span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="done">Done</TabsTrigger>
-                  <TabsTrigger value="failed">Failed</TabsTrigger>
+                  <TabsTrigger className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4" value="done">Done</TabsTrigger>
+                  <TabsTrigger className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4" value="failed">Failed</TabsTrigger>
                 </TabsList>
                 <div className="text-xs text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-border/50">
                   {tasks.length} total
@@ -172,7 +168,7 @@ export default function SpeechToTextPage() {
 
         {/* Footer */}
         <footer className="text-center py-8 text-sm text-muted-foreground">
-          <p>Built with ❤️ using Next.js and Google Gemini</p>
+          <p>Built with ❤️ using Next.js and Whisper</p>
         </footer>
       </div>
     </main>

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Speech to Text | AI-Powered Transcription',
-  description: 'Transform your audio files into accurate text transcriptions using Google Gemini AI. Support for multiple languages, speaker detection, and emotion analysis.',
+  title: 'Speech to Text | Local Transcription',
+  description: 'Transform your audio files into accurate text transcriptions using local Whisper AI. Support for multiple languages and fast processing.',
   generator: 'Next.js',
   icons: {
     icon: [

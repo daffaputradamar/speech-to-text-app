@@ -96,17 +96,60 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
         </div>
       </CardHeader>
       <CardContent>
-        {(task.status === "uploading" || task.status === "pending") && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Uploading file...</span>
+        {task.status === "uploading" && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Uploading file...</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {isDeleting ? "Cancelling..." : "Cancel"}
+            </Button>
+          </div>
+        )}
+
+        {task.status === "pending" && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>Waiting in queue...</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {isDeleting ? "Cancelling..." : "Cancel"}
+            </Button>
           </div>
         )}
 
         {task.status === "processing" && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Processing with Gemini AI...</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Transcribing audio...</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {isDeleting ? "Cancelling..." : "Cancel"}
+            </Button>
           </div>
         )}
 
@@ -211,6 +254,27 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
             </div>
           </div>
         )}
+
+        {task.status === "cancelled" && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AlertCircle className="h-4 w-4" />
+              <span>Transcription was cancelled</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {isDeleting ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -219,12 +283,18 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
 
 function StatusBadge({ status }: { status: TranscriptStatus }) {
   switch (status) {
-    case "pending":
     case "uploading":
       return (
         <Badge variant="outline" className="gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />
           Uploading
+        </Badge>
+      )
+    case "pending":
+      return (
+        <Badge variant="outline" className="gap-1">
+          <Clock className="h-3 w-3" />
+          Queued
         </Badge>
       )
     case "processing":
@@ -242,6 +312,13 @@ function StatusBadge({ status }: { status: TranscriptStatus }) {
         >
           <CheckCircle2 className="h-3 w-3" />
           Done
+        </Badge>
+      )
+    case "cancelled":
+      return (
+        <Badge variant="outline" className="gap-1">
+          <AlertCircle className="h-3 w-3" />
+          Cancelled
         </Badge>
       )
     case "failed":
