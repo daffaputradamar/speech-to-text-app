@@ -1,0 +1,43 @@
+# Docker Compose - GPU Worker Only
+# Deploy this on the server with GPU
+# Communicates with Next.js API instead of direct database access
+
+services:
+  transcribe-worker:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    command: python api_poller.py
+    environment:
+      # URL of the Next.js API server
+      API_BASE_URL: ${API_BASE_URL:-http://web:3000}
+      # Must match WORKER_API_KEY set on the web server
+      WORKER_API_KEY: ${WORKER_API_KEY:-}
+      # Whisper model configuration
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cuda}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-float16}
+      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-2}
+      # Processing configuration
+      MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS:-6}
+      MAX_SEGMENT_DURATION: ${MAX_SEGMENT_DURATION:-900}
+      POLL_INTERVAL: "2"
+      TEMP_DIR: /tmp/worker
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - whisper-cache:/root/.cache/huggingface
+      - worker-temp:/tmp/worker
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  whisper-cache:
+    driver: local
+  worker-temp:
+    driver: local

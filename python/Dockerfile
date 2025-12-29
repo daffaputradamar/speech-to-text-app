@@ -27,6 +27,7 @@ RUN python3.11 -m pip install --upgrade pip \
 
 COPY transcribe_server.py .
 COPY task_poller.py .
+COPY api_poller.py .
 
 RUN mkdir -p /app/uploads && chmod 777 /app/uploads
 
