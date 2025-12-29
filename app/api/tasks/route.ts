@@ -7,13 +7,31 @@ import { isSupportedFormat } from "@/lib/transcribe";
 import { logWithTs, logErrorWithTs } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 
 // Upload directory for pending tasks
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/tmp/uploads";
+const MAX_DURATION_SECONDS = 5 * 60 * 60; // 5 hours in seconds
 
 // Ensure upload directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+/**
+ * Get audio duration in seconds using ffprobe
+ */
+function getAudioDuration(filePath: string): number {
+  try {
+    const output = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      { encoding: "utf-8" }
+    ).trim();
+    return parseFloat(output) || 0;
+  } catch (error) {
+    logErrorWithTs("Error getting audio duration:", error);
+    return 0;
+  }
 }
 
 export async function GET() {
@@ -62,6 +80,29 @@ export async function POST(req: Request) {
       );
     }
 
+    // Save temporarily to check duration
+    const fileExt = path.extname(file.name);
+    const tempTaskId = `temp_${Date.now()}`;
+    const tempFilePath = path.join(UPLOAD_DIR, `${tempTaskId}${fileExt}`);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await fs.promises.writeFile(tempFilePath, buffer);
+
+    // Check audio duration
+    const duration = getAudioDuration(tempFilePath);
+    if (duration > MAX_DURATION_SECONDS) {
+      // Clean up temp file
+      fs.unlinkSync(tempFilePath);
+      const hours = Math.floor(duration / 3600);
+      const minutes = Math.floor((duration % 3600) / 60);
+      return NextResponse.json(
+        { 
+          error: `Audio file is too long (${hours}h ${minutes}m). Maximum allowed is 5 hours.`,
+          duration: Math.round(duration)
+        },
+        { status: 400 }
+      );
+    }
+
     // Create task in database with 'pending' status
     const [inserted] = await db
       .insert(tasks)
@@ -75,14 +116,11 @@ export async function POST(req: Request) {
 
     taskId = inserted.id;
 
-    // Save file to upload directory for Python poller
-    // Include file extension so ffmpeg knows the format
-    const fileExt = path.extname(file.name);
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // Move temp file to final location
     const filePath = path.join(UPLOAD_DIR, `${taskId}${fileExt}`);
-    await fs.promises.writeFile(filePath, buffer);
+    fs.renameSync(tempFilePath, filePath);
     
-    logWithTs(`📁 Saved file for task ${taskId}: ${file.name}`);
+    logWithTs(`📁 Saved file for task ${taskId}: ${file.name} (${Math.round(duration)}s)`);
 
     const newTask: TranscriptTask = {
       id: inserted.id,
