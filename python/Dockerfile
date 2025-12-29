@@ -1,25 +1,33 @@
-# Python Transcription Task Poller Dockerfile
-FROM python:3.11-slim
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# Install system dependencies including ffmpeg
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install Python 3.11 + build deps
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-distutils \
+    python3-pip \
     ffmpeg \
+    gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Force python + pip to be 3.11
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python
 
 WORKDIR /app
 
-# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# 🚨 THIS LINE IS THE KEY
+RUN python3.11 -m pip install --upgrade pip \
+ && python3.11 -m pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY transcribe_server.py .
 COPY task_poller.py .
 
-# Create uploads directory with world-writable permissions for shared volume
 RUN mkdir -p /app/uploads && chmod 777 /app/uploads
 
-# Run the task poller (no HTTP server, run as root for volume access)
 CMD ["python", "task_poller.py"]
