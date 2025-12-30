@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
+import { AuthProvider } from '@/components/auth-provider'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 const geist = Geist({ 
@@ -49,17 +51,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="modern-bg min-h-screen">
-            {/* Neon glow effects */}
-            <div className="neon-glow neon-glow-orange w-[500px] h-[500px] -top-32 -left-32" />
-            <div className="neon-glow neon-glow-blue w-[400px] h-[400px] top-1/2 -right-24" />
-            <div className="neon-glow neon-glow-purple w-[350px] h-[350px] -bottom-20 left-1/3" />
-            
-            {/* Main content */}
-            <div className="content-layer">
-              {children}
+          <AuthProvider>
+            <div className="modern-bg min-h-screen">
+              {/* Neon glow effects */}
+              <div className="neon-glow neon-glow-orange w-[500px] h-[500px] -top-32 -left-32" />
+              <div className="neon-glow neon-glow-blue w-[400px] h-[400px] top-1/2 -right-24" />
+              <div className="neon-glow neon-glow-purple w-[350px] h-[350px] -bottom-20 left-1/3" />
+              
+              {/* Main content */}
+              <div className="content-layer">
+                {children}
+              </div>
             </div>
-          </div>
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

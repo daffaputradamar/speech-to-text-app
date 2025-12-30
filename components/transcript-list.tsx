@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { FileAudio, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, User, Copy, Check, Download, Trash2, Loader2 } from "lucide-react"
+import { FileAudio, CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, User, Copy, Check, Download, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import type { TranscriptTask, TranscriptStatus } from "@/types/transcription"
 
@@ -15,9 +15,14 @@ export type { TranscriptTask, TranscriptStatus }
 interface TranscriptListProps {
   tasks: TranscriptTask[]
   onChange?: () => void | Promise<void>
+  itemsPerPage?: number
 }
 
-export function TranscriptList({ tasks, onChange }: TranscriptListProps) {
+const DEFAULT_ITEMS_PER_PAGE = 10
+
+export function TranscriptList({ tasks, onChange, itemsPerPage = DEFAULT_ITEMS_PER_PAGE }: TranscriptListProps) {
+  const [currentPage, setCurrentPage] = useState(1)
+
   if (tasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-border/50 rounded-xl bg-muted/20 backdrop-blur-sm">
@@ -30,11 +35,73 @@ export function TranscriptList({ tasks, onChange }: TranscriptListProps) {
     )
   }
 
+  const totalPages = Math.ceil(tasks.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedTasks = tasks.slice(startIndex, endIndex)
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1))
+  }
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+  }
+
   return (
     <div className="space-y-4">
-      {tasks.map((task) => (
-        <TranscriptCard key={task.id} task={task} onChange={onChange} />
-      ))}
+      <div className="space-y-4">
+        {paginatedTasks.map((task) => (
+          <TranscriptCard key={task.id} task={task} onChange={onChange} />
+        ))}
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-lg border border-border/50 bg-muted/20 backdrop-blur-sm">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1}-{Math.min(endIndex, tasks.length)} of {tasks.length}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+
+            <div className="flex items-center gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(page)}
+                  className="min-w-10"
+                >
+                  {page}
+                </Button>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="gap-1"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -107,7 +174,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="text-destructive hover:bg-destructive/10"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               {isDeleting ? "Cancelling..." : "Cancel"}
@@ -126,7 +193,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="text-destructive hover:bg-destructive/10"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               {isDeleting ? "Cancelling..." : "Cancel"}
@@ -145,7 +212,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="text-destructive hover:bg-destructive/10"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               {isDeleting ? "Cancelling..." : "Cancel"}
@@ -224,7 +291,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
                   size="sm"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="text-destructive hover:bg-destructive/10"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   {isDeleting ? "Deleting..." : "Delete"}
@@ -246,7 +313,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
                 size="sm"
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 {isDeleting ? "Deleting..." : "Delete"}
@@ -267,7 +334,7 @@ function TranscriptCard({ task, onChange }: { task: TranscriptTask; onChange?: (
                 size="sm"
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 {isDeleting ? "Deleting..." : "Delete"}

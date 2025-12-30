@@ -1,30 +1,66 @@
 "use client"
 
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 import { UploadZone } from "@/components/upload-zone"
 import { TranscriptList } from "@/components/transcript-list"
+import { UserBar } from "@/components/user-bar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Mic, Sparkles, Globe, Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
+import { Sparkles, Globe, Loader2 } from "lucide-react"
 import type { TranscriptTask } from "@/types/transcription"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 export default function SpeechToTextPage() {
-  const { data: tasks = [], mutate } = useSWR<TranscriptTask[]>("/api/tasks", fetcher, {
-    refreshInterval: (data) => {
-      // Only poll if there are tasks in progress
-      const hasActiveTask = data?.some(t => 
-        t.status === "processing" || t.status === "uploading" || t.status === "pending"
-      )
-      return hasActiveTask ? 2000 : 0 // Poll every 2s when active, stop when idle
-    },
-  })
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const { data: tasks = [], mutate } = useSWR<TranscriptTask[]>(
+    session?.user ? "/api/tasks" : null, 
+    fetcher, 
+    {
+      refreshInterval: (data) => {
+        // Only poll if there are tasks in progress
+        const hasActiveTask = data?.some(t => 
+          t.status === "processing" || t.status === "uploading" || t.status === "pending"
+        )
+        return hasActiveTask ? 2000 : 0 // Poll every 2s when active, stop when idle
+      },
+    }
+  )
   const { toast } = useToast()
-  const { theme, setTheme } = useTheme()
+
+  // Redirect based on auth status
+  useEffect(() => {
+    if (status === "loading") return
+    
+    if (!session?.user) {
+      router.push("/login")
+      return
+    }
+
+    if (session.user.status === "PENDING" || session.user.status === "REJECTED") {
+      router.push("/pending")
+      return
+    }
+  }, [session, status, router])
+
+  // Show loading state while checking auth
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Don't render main content until authenticated
+  if (!session?.user || session.user.status !== "APPROVED") {
+    return null
+  }
 
   const handleUpload = async (file: File) => {
     try {
@@ -66,44 +102,22 @@ export default function SpeechToTextPage() {
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-8">
-        {/* Header */}
-        <header className="flex flex-col gap-6 pt-8 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-                <Mic className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight gradient-text">
-                  Speech to Text
-                </h1>
-                <p className="text-sm text-muted-foreground">Local transcription with Whisper</p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="rounded-full"
-            >
-              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              <span className="sr-only">Toggle theme</span>
-            </Button>
-          </div>
+        {/* User Header */}
+        <div className="pt-4">
+          <UserBar />
+        </div>
 
-          {/* Feature badges */}
-          <div className="flex flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full text-xs font-medium text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              AI Transcription
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/5 border border-blue-500/10 rounded-full text-xs font-medium text-blue-600 dark:text-blue-400">
-              <Globe className="h-3.5 w-3.5" />
-              Multi-language
-            </div>
+        {/* Feature badges */}
+        <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full text-xs font-medium text-primary">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Transcription
           </div>
-        </header>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/5 border border-blue-500/10 rounded-full text-xs font-medium text-blue-600 dark:text-blue-400">
+            <Globe className="h-3.5 w-3.5" />
+            Multi-language
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">

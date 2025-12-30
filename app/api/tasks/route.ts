@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { tasks } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import type { TranscriptTask } from "@/types/transcription";
 import { isSupportedFormat } from "@/lib/transcribe";
 import { logWithTs, logErrorWithTs } from "@/lib/logger";
@@ -35,14 +36,28 @@ function getAudioDuration(filePath: string): number {
 }
 
 export async function GET() {
+  const session = await auth();
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.user.status !== "APPROVED") {
+    return NextResponse.json({ error: "Account not approved" }, { status: 403 });
+  }
+
   if (!db) {
     return NextResponse.json({ error: "Database not configured" }, { status: 500 });
   }
 
-  const all = await db
-    .select()
-    .from(tasks)
-    .orderBy(desc(tasks.createdAt));
+  // Filter tasks by user - only return user's own tasks (or all if admin)
+  const all = session.user.isAdmin
+    ? await db.select().from(tasks).orderBy(desc(tasks.createdAt))
+    : await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.userId, session.user.id))
+        .orderBy(desc(tasks.createdAt));
 
   return NextResponse.json(all);
 }
@@ -51,6 +66,16 @@ export async function POST(req: Request) {
   let taskId: string | null = null;
 
   try {
+    const session = await auth();
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (session.user.status !== "APPROVED") {
+      return NextResponse.json({ error: "Account not approved" }, { status: 403 });
+    }
+
     if (!db) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 });
     }
@@ -111,6 +136,7 @@ export async function POST(req: Request) {
         fileSize: file.size,
         status: "pending",  // Python poller will pick this up
         progress: 0,
+        userId: session.user.id,
       })
       .returning();
 
@@ -168,6 +194,16 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const session = await auth();
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (session.user.status !== "APPROVED") {
+      return NextResponse.json({ error: "Account not approved" }, { status: 403 });
+    }
+
     if (!db) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 });
     }
@@ -182,11 +218,13 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // Get the task to check its status
-    const task = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId));
+    // Get the task to check its status and ownership
+    const task = session.user.isAdmin
+      ? await db.select().from(tasks).where(eq(tasks.id, taskId))
+      : await db
+          .select()
+          .from(tasks)
+          .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.user.id)));
 
     if (task.length === 0) {
       return NextResponse.json(

@@ -1,15 +1,34 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { tasks } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const session = await auth();
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.user.status !== "APPROVED") {
+    return NextResponse.json({ error: "Account not approved" }, { status: 403 });
+  }
+
   if (!db) {
     return NextResponse.json({ error: "Database not configured" }, { status: 500 });
   }
 
   const taskId = params.id;
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  
+  // Only allow downloading own tasks (or admin can download any)
+  const [task] = session.user.isAdmin
+    ? await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    : await db
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.user.id)))
+        .limit(1);
 
   if (!task) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
