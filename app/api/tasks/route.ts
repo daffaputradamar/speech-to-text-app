@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     const fileExt = path.extname(file.name);
     const tempTaskId = `temp_${Date.now()}`;
     const tempFilePath = path.join(UPLOAD_DIR, `${tempTaskId}${fileExt}`);
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = new Uint8Array(await file.arrayBuffer());
     await fs.promises.writeFile(tempFilePath, buffer);
 
     // Check audio duration
